@@ -1,0 +1,100 @@
+########################## Sample reduction process of data from November 26, 2012 in IRAF/PyRAF
+Raw spectra in raw/, create /proc subdirectory for processed files, and /database for IRAF database files.
+
+task pipeline_jhk_new=/Path/to/pipeline_jhk_new.cl
+
+### Load the first and last spectrum of slit scan groups to check for shifts in the airglow lines due to instrument flexure
+ds9 8BNSW1.0006.fits 8BNSW1.0085.fits 8BNSW1_rot90.0086.fits 8BNSW1_rot90.0165.fits 11BNNW2.0179.fits 11BNNW2.0258.fits 4BNnorth4.0272.fits 4BNnorth4.0351.fits M82_Box1_smaller.0365.fits M82_Box1_smaller.0398.fits M82_Box2_rot90.0400.fits M82_Box2_rot90.0406.fits M82_Box3_rot90.0407.fits M82_Box3_rot90.0426.fits &
+ds9 8BNSW1.*.fits &	
+
+###### Group the raw spectra that exhibit no signs of flexure shifts into lists
+cd raw
+!ls HD37547_60s_nods.004[67].fits | sed 's/\.fits//' > HD37547.list
+!ls 8BNSW1.*.fits | sed 's/\.fits//' > 8BNSW1.list  ## will need to split this into 2
+!ls 8BNSW1_rot90.*.fits | sed 's/\.fits//' > 8BNSW1_rot90.list
+!ls 11BNNW2.*.fits | sed 's/\.fits//' > 11BNNW2.list
+!ls 4BNnorth4.*.fits | sed 's/\.fits//' > 4BNnorth4.list
+!ls M82*fits | sed 's/\.fits//' > M82.list
+!ls offposition*fits | sed 's/\.fits//' > offposition.list ## will need to move offposition_1 out of here
+!mv *.list ..
+cd ..
+
+#vi forfitcoords.list, put in offposition_1.0001 8BNSW1.0082 8BNSW1_rot90.0133 offposition_2.0166 >forfitcoords.list
+## split up 8BNSW1.list into Group1.list and Group2.list and add the offposition_1 images to Group1.list
+mv 8BNSW1_rot90.list Group3.list
+!cat 11BNNW2.list 4BNnorth4.list M82.list offposition.list >Group4.list
+## make sure to add BrQtz.fits to Group4.list
+#vi Group1_test.list, put in 8BNSW1.0006
+#######
+
+#### Have pipeline_jhk just crop an A and B nod of the standard star and one spectrum from each of the groupings defined above.
+#### Wavelength calibration and spectral rectification will be done separately for each grouping.
+pipeline_jhk HD37547.list HD37547.list justcrop=yes background=no combine=no rawdir='raw/' procdir='proc/' darksub=no
+pipeline_jhk forfitcoords.list output justcrop=yes combine=no background=no rawdir='raw/' procdir='proc/' darksub=no
+
+### Hardlink the cropped spectra from the proc/ directory. 
+!ln proc/HD37547_60s_nods.004[67]_?.fits .
+!ln proc/offposition_1.0001_?.fits .
+!ln proc/8BNSW1.0082_?.fits .
+!ln proc/8BNSW1_rot90.0133_?.fits .
+!ln proc/offposition_2.0166_?.fits .
+
+### Run IRAF's identify on the A and B nods for the J, H, and K bands. Mark the positions of the stars with "m" 
+### and define the positions of the stars as 25.0 and 75.0.
+identify HD37547_60s_nods.0046_J.fits,HD37547_60s_nods.0047_J.fits section="middle column" coordlist="" units=""
+identify HD37547_60s_nods.0046_H.fits,HD37547_60s_nods.0047_H.fits section="middle column" coordlist="" units=""
+identify HD37547_60s_nods.0046_K.fits,HD37547_60s_nods.0047_K.fits section="middle column" coordlist="" units=""
+
+
+reidentify HD37547_60s_nods.0046_J.fits HD37547_60s_nods.0046_J.fits section="middle column" coordlist="" nlost=10 ver+
+reidentify HD37547_60s_nods.0047_J.fits HD37547_60s_nods.0047_J.fits section="middle column" coordlist="" nlost=10 ver+
+reidentify HD37547_60s_nods.0046_H.fits HD37547_60s_nods.0046_H.fits section="middle column" coordlist="" nlost=10 ver+
+reidentify HD37547_60s_nods.0047_H.fits HD37547_60s_nods.0047_H.fits section="middle column" coordlist="" nlost=10 ver+
+reidentify HD37547_60s_nods.0046_K.fits HD37547_60s_nods.0046_K.fits section="middle column" coordlist="" nlost=10 ver+
+reidentify HD37547_60s_nods.0047_K.fits HD37547_60s_nods.0047_K.fits section="middle column" coordlist="" nlost=10 ver+
+
+
+fitcoords HD37547_60s_nods.0046_J,HD37547_60s_nods.0047_J fitname="starsJ" combine=yes xo=6 yo=2 interactive+
+fitcoords HD37547_60s_nods.0046_H,HD37547_60s_nods.0047_H fitname="starsH" combine=yes xo=6 yo=2 interactive+
+fitcoords HD37547_60s_nods.0046_K,HD37547_60s_nods.0047_K fitname="starsK" combine=yes xo=6 yo=2 interactive+
+
+
+### Group 1 reductions -- I like to test one spectrum first to see if it worked well
+reidentify sample_id_J_AY offposition_1.0001_J.fits coordlist="OHll.dat" nlost=10 verbose="yes" shift="INDEF" search=5 step=2 nsum=5 override=yes interactive=NO
+reidentify sample_id_H_AY offposition_1.0001_H.fits coordlist="OHll.dat" nlost=10 verbose="yes" shift="INDEF" search=5 step=5 nsum=5 override=yes interactive=NO
+reidentify sample_id_K_AY offposition_1.0001_K.fits coordlist="OHll.dat" nlost=10 verbose="yes" shift="INDEF" search=5 step=5 nsum=5 override=yes interactive=NO
+fitcoords offposition_1.0001_J fitname="offposition_1.0001skylinesJ" combine=yes xo=4 yo=3 interactive+
+fitcoords offposition_1.0001_H fitname="offposition_1.0001skylinesH" combine=yes xo=4 yo=3 interactive+
+fitcoords offposition_1.0001_K fitname="offposition_1.0001skylinesK" combine=yes xo=4 yo=3 interactive+
+pipeline_jhk Group1_test.list test_output caleach=yes combine=no procdir='proc/' rawdir='raw/' darksub=no clobber=yes background=no skylines='offposition_1.0001skylines'
+pipeline_jhk Group1.list test_output caleach=yes combine=no procdir='proc/' rawdir='raw/' darksub=no clobber=yes background=no skylines='offposition_1.0001skylines'
+
+### Group 2 reductions
+reidentify sample_id_J_AY 8BNSW1.0082_J.fits coordlist="OHll.dat" nlost=10 verbose="yes" shift="INDEF" search=5 step=2 nsum=5 override=yes interactive=NO
+reidentify sample_id_H_AY 8BNSW1.0082_H.fits coordlist="OHll.dat" nlost=10 verbose="yes" shift="INDEF" search=5 step=5 nsum=5 override=yes interactive=NO
+reidentify sample_id_K_AY 8BNSW1.0082_K.fits coordlist="OHll.dat" nlost=10 verbose="yes" shift="INDEF" search=5 step=5 nsum=5 override=yes interactive=NO
+fitcoords 8BNSW1.0082_J fitname="8BNSW1.0082skylinesJ" combine=yes xo=4 yo=3 interactive+
+fitcoords 8BNSW1.0082_H fitname="8BNSW1.0082skylinesH" combine=yes xo=4 yo=3 interactive+
+fitcoords 8BNSW1.0082_K fitname="8BNSW1.0082skylinesK" combine=yes xo=4 yo=3 interactive+
+pipeline_jhk Group2_test.list test_output caleach=yes combine=no procdir='proc/' rawdir='raw/' darksub=no clobber=yes background=no skylines='8BNSW1.0082skylines'
+pipeline_jhk Group2.list test_output caleach=yes combine=no procdir='proc/' rawdir='raw/' darksub=no clobber=yes background=no skylines='8BNSW1.0082skylines'
+
+### Group 3 reductions
+reidentify sample_id_J_AY 8BNSW1_rot90.0133_J.fits coordlist="OHll.dat" nlost=10 verbose="yes" shift="INDEF" search=5 step=2 nsum=5 override=yes interactive=NO
+reidentify sample_id_H_AY 8BNSW1_rot90.0133_H.fits coordlist="OHll.dat" nlost=10 verbose="yes" shift="INDEF" search=5 step=5 nsum=5 override=yes interactive=NO
+reidentify sample_id_K_AY 8BNSW1_rot90.0133_K.fits coordlist="OHll.dat" nlost=10 verbose="yes" shift="INDEF" search=5 step=5 nsum=5 override=yes interactive=NO
+fitcoords 8BNSW1_rot90.0133_J fitname="8BNSW1_rot90.0133skylinesJ" combine=yes xo=4 yo=3 interactive+
+fitcoords 8BNSW1_rot90.0133_H fitname="8BNSW1_rot90.0133skylinesH" combine=yes xo=4 yo=3 interactive+
+fitcoords 8BNSW1_rot90.0133_K fitname="8BNSW1_rot90.0133skylinesK" combine=yes xo=4 yo=3 interactive+
+pipeline_jhk Group3_test.list test_output caleach=yes combine=no procdir='proc/' rawdir='raw/' darksub=no clobber=yes background=no skylines='8BNSW1_rot90.0133skylines'
+pipeline_jhk Group3.list test_output caleach=yes combine=no procdir='proc/' rawdir='raw/' darksub=no clobber=yes background=no skylines='8BNSW1_rot90.0133skylines'
+
+### Group 4 reductions
+reidentify sample_id_J_AY offposition_2.0166_J.fits coordlist="OHll.dat" nlost=10 verbose="yes" shift="INDEF" search=5 step=2 nsum=5 override=yes interactive=NO
+reidentify sample_id_H_AY offposition_2.0166_H.fits coordlist="OHll.dat" nlost=10 verbose="yes" shift="INDEF" search=5 step=5 nsum=5 override=yes interactive=NO
+reidentify sample_id_K_AY offposition_2.0166_K.fits coordlist="OHll.dat" nlost=10 verbose="yes" shift="INDEF" search=5 step=5 nsum=5 override=yes interactive=NO
+fitcoords offposition_2.0166_J fitname="offposition_2.0166skylinesJ" combine=yes xo=4 yo=3 interactive+
+fitcoords offposition_2.0166_H fitname="offposition_2.0166skylinesH" combine=yes xo=4 yo=3 interactive+
+fitcoords offposition_2.0166_K fitname="offposition_2.0166skylinesK" combine=yes xo=4 yo=3 interactive+
+pipeline_jhk Group4_test.list test_output caleach=yes combine=no procdir='proc/' rawdir='raw/' darksub=no clobber=yes background=no skylines='offposition_2.0166skylines'
+pipeline_jhk Group4.list test_output caleach=yes combine=no procdir='proc/' rawdir='raw/' darksub=no clobber=yes background=no skylines='offposition_2.0166skylines'
